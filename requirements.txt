@@ -1,0 +1,9 @@
+langchain
+langchain-core
+langchain-community
+openai
+unstructured
+pymupdf
+sentence-transformers
+faiss-cpu
+chromadb
