@@ -1,0 +1,22 @@
+pipenv update[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+numpy = "*"
+langchain = "*"
+langchain-core = "*"
+langchain-community = "*"
+openai = "*"
+unstructured = "*"
+pymupdf = "*"
+sentence-transformers = "*"
+faiss-cpu = "*"
+pydantic-settings = "*"
+chromadb = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.14"
