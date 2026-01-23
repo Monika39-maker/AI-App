@@ -1,4 +1,4 @@
-pipenv update[[source]]
+[[source]]
 url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
@@ -8,6 +8,7 @@ numpy = "*"
 langchain = "*"
 langchain-core = "*"
 langchain-community = "*"
+langchain-groq = "*"
 openai = "*"
 unstructured = "*"
 pymupdf = "*"
@@ -15,6 +16,7 @@ sentence-transformers = "*"
 faiss-cpu = "*"
 pydantic-settings = "*"
 chromadb = "*"
+python-dotenv = "*"
 
 [dev-packages]
 
