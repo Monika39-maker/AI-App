@@ -437,15 +437,53 @@ smart_answer2 = generate_smart_response(test_query2, results2, llm)
 
 print(f"Query: {test_query2}")
 print(f"Smart Answer: {smart_answer2}")
-print("-" * 50)
 
-# Test clear query
-test_query3 = "What are the exclusions in care insurance"
+# Test new queries
+print("\n=== Testing New Questions ===")
+
+# Test 1: Restaurant-style question (for your future restaurant RAG)
+test_query3 = "What medical treatments are covered?"
 results3 = rag_retriever.retrieve(test_query3)
 smart_answer3 = generate_smart_response(test_query3, results3, llm)
 
 print(f"Query: {test_query3}")
-print(f"Smart Answer: {smart_answer3}")  
+print(f"Smart Answer: {smart_answer3}")
+print("-" * 50)
+
+# Test 2: Very vague question
+test_query4 = "tell me about the insurance"
+results4 = rag_retriever.retrieve(test_query4)
+smart_answer4 = generate_smart_response(test_query4, results4, llm)
+
+print(f"Query: {test_query4}")
+print(f"Smart Answer: {smart_answer4}")
+print("-" * 50)
+
+# Test 3: Question about claims process
+test_query5 = "How do I make a claim?"
+results5 = rag_retriever.retrieve(test_query5)
+smart_answer5 = generate_smart_response(test_query5, results5, llm)
+
+print(f"Query: {test_query5}")
+print(f"Smart Answer: {smart_answer5}")
+print("-" * 50)
+
+# Test 4: Complex multi-part question
+test_query6 = "What's covered and what's excluded in the travel insurance?"
+results6 = rag_retriever.retrieve(test_query6)
+smart_answer6 = generate_smart_response(test_query6, results6, llm)
+
+print(f"Query: {test_query6}")
+print(f"Smart Answer: {smart_answer6}")
+print("-" * 50)
+
+# Test clear query
+test_query7 = "What are the exclusions in care insurance"
+results7 = rag_retriever.retrieve(test_query7)
+smart_answer7 = generate_smart_response(test_query7, results7, llm)
+
+print(f"Query: {test_query7}")
+print(f"Smart Answer: {smart_answer7}")  
 
 
 
