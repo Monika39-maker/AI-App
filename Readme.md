@@ -2,3 +2,4 @@
 - activate the vertual environment- pipenv shell
 - install requirements- pipenv install
 - run the app- pipenv run python AIapp1.py
+- start the server- uvicorn AIapp1:app --reload --port 8001
