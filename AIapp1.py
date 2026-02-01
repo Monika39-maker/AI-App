@@ -149,7 +149,7 @@ class EmbeddingManager:
         """
         if not self.model:
             raise ValueError("Model not loaded.")
-        embeddings = self.model.encode(texts, convert_to_numpy=True)
+        embeddings = self.model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
         return embeddings
     
     def get_embedding_dimension(self) -> int:
@@ -168,8 +168,8 @@ embedding_manager = EmbeddingManager()
 
 class VectorStore:
     """Manages document embeddings using FAISS"""
-    def __init__(self, index_file: str = "AIdata/vector_store.faiss", 
-                 data_file: str = "AIdata/vector_store_data.pkl"):
+    def __init__(self, index_file: str = str(ai_data_dir / "vector_store.faiss"), 
+                 data_file: str = str(ai_data_dir / "vector_store_data.pkl")):
         """Initialize the vector store
         Args:
             index_file (str): Path to save/load FAISS index.
@@ -196,7 +196,7 @@ class VectorStore:
             else:
                 # Create new index
                 embedding_dim = embedding_manager.get_embedding_dimension()
-                self.index = faiss.IndexFlatL2(embedding_dim)
+                self.index = faiss.IndexFlatIP(embedding_dim)
                 #print(f"Created new FAISS index with dimension {embedding_dim}")
         except Exception as e:
             print(f"Error initializing FAISS: {e}")
@@ -308,7 +308,7 @@ class RAGretrieve:
         self.vector_store = vector_store
         self.embedding_manager = embedding_manager
     
-    def retrieve(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+    def retrieve(self, query: str, k: int = 15) -> List[Dict[str, Any]]:
         """
         Retrieve relevant documents for a query
         
@@ -511,7 +511,7 @@ if __name__ == "__main__":
     print("-" * 50)
 
     # Test clear query
-    test_query7 = "What are the exclusions in care insurance"
+    test_query7 = "what kind of covers are included under the care insurance policy?"
     results7 = rag_retriever.retrieve(test_query7)
     smart_answer7 = generate_smart_response(test_query7, results7, llm)
 
