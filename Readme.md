@@ -1,0 +1,4 @@
+- create a vertual environment- pip install pipenv. 
+- activate the vertual environment- pipenv shell
+- install requirements- pipenv install
+- run the app- pipenv run python AIapp1.py
