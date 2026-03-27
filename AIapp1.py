@@ -1,29 +1,33 @@
-# from langchain_core.documents import Document
-
-# doc=Document(
-#     page_content="This is the content of the document.", 
-#     metadata={
-#         "source": "AIapp.py",
-#         "aurthor": "mdangol",
-#         "date_created": "2024-06-15"
-#     }
-    
-# )
-# print(doc)
-
-from langchain_community.document_loaders import TextLoader
-
-#loader=TextLoader("C:/Users/mdangol/Downloads/InsuranceApp/AI-App/AIdata/data.txt", encoding='utf-8')
-# documents=loader.load()
-# print(documents)
 import os
 from langchain_community.document_loaders import DirectoryLoader
 from sentence_transformers.util import similarity
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from langchain_community.document_loaders import PyMuPDFLoader
+from pathlib import Path
 
-# Simple text splitter function
+# find the directory of the documents
+ai_data_dir = Path(os.getenv('AI_DATA_DIR', Path(__file__).resolve().parent / 'AIdata')).resolve()
+if not ai_data_dir.exists():
+    raise FileNotFoundError(f"Directory not found: '{str(ai_data_dir)}'")
+
+# directory loader function
+dir_loader = DirectoryLoader(
+    #ai_data_dir.as_posix() #as_posix() returns the path as a string, example: C:/Users/mdangol/Downloads/InsuranceApp/AI-App/AIdata
+    str(ai_data_dir),
+    glob="**/*.pdf",
+    loader_cls=PyMuPDFLoader,
+    show_progress=False
+)
+
+# load the documents with the directory loader function and store them in a list named documents
+documents = dir_loader.load()
+
+
+#-----------------CHUNKING DOCUMENTS CODE START-----------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------------------------------
+
+# Simple chunking function to split a document content into smaller chunks
 def simple_text_splitter(text, chunk_size=1000, chunk_overlap=200):
     """Split text into chunks with overlap."""
     chunks = []
@@ -40,33 +44,10 @@ def simple_text_splitter(text, chunk_size=1000, chunk_overlap=200):
     
     return chunks
 
-# dir_loader = DirectoryLoader(
-#     "C:/Users/mdangol/Downloads/InsuranceApp/AI-App/AIdata",
-#     glob="**/*.txt",
-#     loader_cls=TextLoader,
-#     loader_kwargs={'encoding': 'utf-8'},
-#     show_progress=False
-# )
-# documents = dir_loader.load()
-# print(documents)
-
-from langchain_community.document_loaders import PyMuPDFLoader
-from pathlib import Path
-
-ai_data_dir = Path(os.getenv('AI_DATA_DIR', Path(__file__).resolve().parent / 'AIdata')).resolve()
-if not ai_data_dir.exists():
-    raise FileNotFoundError(f"Directory not found: '{ai_data_dir.as_posix()}'")
-
-dir_loader = DirectoryLoader(
-    ai_data_dir.as_posix(),
-    glob="**/*.pdf",
-    loader_cls=PyMuPDFLoader,
-    show_progress=False
-)
-documents = dir_loader.load()
-print(documents)
 
 
+
+# Function to loop through the documents and split each document into smaller chunks using simple_text_splitter function, then save the chunks in a list named split_docs
 def split_documents(documents, chunk_size=1000, chunk_overlap=200):
     """
     Split documents into smaller chunks for processing.
@@ -110,6 +91,13 @@ def split_documents(documents, chunk_size=1000, chunk_overlap=200):
     
     return split_docs
 
+#-----------------CHUNKING DOCUMENTS CODE END-----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------  
+
+
+#-----------------EMBEDDING CHUNKS CODE START----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import faiss
@@ -119,7 +107,7 @@ import os
 import pickle
 #from sklearn.metrics.pairwise import cosine_similarity
 
-
+# create embedding manager class
 class EmbeddingManager:
     """Handles document embedding generation using SentenceTransformer"""
     def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
@@ -165,6 +153,10 @@ class EmbeddingManager:
 embedding_manager = EmbeddingManager()
 
 # print("Embedding dimension:", embedding_manager)
+
+#-----------------SAVING THE EMBEDDINGS IN VECTOR STORE CODE START----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------
+# -------------------------***********need further understanding----****************************************************************
 
 class VectorStore:
     """Manages document embeddings using FAISS"""
@@ -384,14 +376,31 @@ def detect_query_intent(query, retrieved_docs):
 
 def generate_smart_response(query, retrieved_docs, llm):
     """Generate response that handles intent mismatches gracefully"""
-    
+
+    grounding_instruction = (
+        "You are a helpful assistant. Answer the user's question using ONLY the information in the provided context. "
+        "If the context does not contain enough information to answer, say you don't know based on the provided documents. "
+        "Do not guess or use outside knowledge."
+    )
+
+    if not retrieved_docs:
+        prompt = f"""{grounding_instruction}
+
+User Question: {query}
+Context: (empty)
+
+Answer:"""
+        return llm.invoke(prompt).content
+
     intent_analysis = detect_query_intent(query, retrieved_docs)
     context = "\n".join([doc['content'] for doc in retrieved_docs])
     
     if intent_analysis['mismatch']:
         # User wants X but we found Y
         if intent_analysis['user_wants'] == 'coverage' and intent_analysis['found'] == 'exclusions':
-            prompt = f"""The user asked about coverage but I only found exclusion information. 
+            prompt = f"""{grounding_instruction}
+
+            The user asked about coverage but I only found exclusion information. 
             Please acknowledge this limitation and provide the exclusion information that might be helpful.
             
             User Question: {query}
@@ -400,7 +409,9 @@ def generate_smart_response(query, retrieved_docs, llm):
             Response: "I couldn't find specific coverage information in the documents, but here are the exclusions that might help you understand what's not covered: [exclusion details]"
             """
         elif intent_analysis['user_wants'] == 'exclusions' and intent_analysis['found'] == 'coverage':
-            prompt = f"""The user asked about exclusions but I only found coverage information.
+            prompt = f"""{grounding_instruction}
+
+            The user asked about exclusions but I only found coverage information.
             Please acknowledge this and provide what coverage information is available.
             
             User Question: {query}
@@ -409,7 +420,9 @@ def generate_smart_response(query, retrieved_docs, llm):
             Response: "I couldn't find specific exclusion information, but here's what I found about coverage: [coverage details]"
             """
         else:
-            prompt = f"""I found information that might not directly match your question. Please explain what's available.
+            prompt = f"""{grounding_instruction}
+
+            I found information that might not directly match your question. Please explain what's available.
             
             User Question: {query}
             Available Context: {context}
@@ -418,7 +431,9 @@ def generate_smart_response(query, retrieved_docs, llm):
             """
     else:
         # Normal response - intent matches
-        prompt = f"""Based on the context, answer the user's question accurately and concisely.
+        prompt = f"""{grounding_instruction}
+
+        Based on the context, answer the user's question accurately and concisely.
         
         User Question: {query}
         Context: {context}
@@ -430,6 +445,8 @@ def generate_smart_response(query, retrieved_docs, llm):
 
 app = FastAPI()
 
+#----------------------------------------Communicate with Frontend starts----------------------------------------
+#----------------------------------------Communicate with Frontend starts----------------------------------------
 
 class RagRequest(BaseModel):
     prompt: str
@@ -450,47 +467,54 @@ def rag_endpoint(body: RagRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+#----------------------------------------Communicate with Frontend ends----------------------------------------
+#----------------------------------------Communicate with Frontend ends----------------------------------------
+
+
+#----------------------------------------Test the smart response system starts----------------------------------------
+#----------------------------------------Test the smart response system starts----------------------------------------
+
 if __name__ == "__main__":
     # Test the smart response system
-    print("\n=== Testing Smart RAG System ===")
+    # print("\n=== Testing Smart RAG System ===")
 
     # Test ambiguous query
-    test_query = "what are covered under care insurance policy"
-    results = rag_retriever.retrieve(test_query)
-    smart_answer = generate_smart_response(test_query, results, llm)
+    # test_query = "what are covered under care insurance policy"
+    # results = rag_retriever.retrieve(test_query)
+    # smart_answer = generate_smart_response(test_query, results, llm)
 
-    print(f"Query: {test_query}")
-    print(f"Smart Answer: {smart_answer}")
-    print("-" * 50)
+    # print(f"Query: {test_query}")
+    # print(f"Smart Answer: {smart_answer}")
+    # print("-" * 50)
 
     # Test another ambiguous query
-    test_query2 = "what services does care insurance provide"
-    results2 = rag_retriever.retrieve(test_query2)
-    smart_answer2 = generate_smart_response(test_query2, results2, llm)
+    # test_query2 = "what services does care insurance provide"
+    # results2 = rag_retriever.retrieve(test_query2)
+    # smart_answer2 = generate_smart_response(test_query2, results2, llm)
 
-    print(f"Query: {test_query2}")
-    print(f"Smart Answer: {smart_answer2}")
+    # print(f"Query: {test_query2}")
+    # print(f"Smart Answer: {smart_answer2}")
 
     # Test new queries
-    print("\n=== Testing New Questions ===")
+    # print("\n=== Testing New Questions ===")
 
     # Test 1: Restaurant-style question (for your future restaurant RAG)
-    test_query3 = "What medical treatments are covered?"
-    results3 = rag_retriever.retrieve(test_query3)
-    smart_answer3 = generate_smart_response(test_query3, results3, llm)
+    # test_query3 = "What medical treatments are covered?"
+    # results3 = rag_retriever.retrieve(test_query3)
+    # smart_answer3 = generate_smart_response(test_query3, results3, llm)
 
-    print(f"Query: {test_query3}")
-    print(f"Smart Answer: {smart_answer3}")
-    print("-" * 50)
+    # print(f"Query: {test_query3}")
+    # print(f"Smart Answer: {smart_answer3}")
+    # print("-" * 50)
 
     # Test 2: Very vague question
-    test_query4 = "tell me about the insurance"
-    results4 = rag_retriever.retrieve(test_query4)
-    smart_answer4 = generate_smart_response(test_query4, results4, llm)
+    # test_query4 = "tell me about the insurance"
+    # results4 = rag_retriever.retrieve(test_query4)
+    # smart_answer4 = generate_smart_response(test_query4, results4, llm)
 
-    print(f"Query: {test_query4}")
-    print(f"Smart Answer: {smart_answer4}")
-    print("-" * 50)
+    # print(f"Query: {test_query4}")
+    # print(f"Smart Answer: {smart_answer4}")
+    # print("-" * 50)
 
     # Test 3: Question about claims process
     test_query5 = "How do I make a claim?"
@@ -502,18 +526,22 @@ if __name__ == "__main__":
     print("-" * 50)
 
     # Test 4: Complex multi-part question
-    test_query6 = "What's covered and what's excluded in the travel insurance?"
-    results6 = rag_retriever.retrieve(test_query6)
-    smart_answer6 = generate_smart_response(test_query6, results6, llm)
+    # test_query6 = "What's covered and what's excluded in the travel insurance?"
+    # results6 = rag_retriever.retrieve(test_query6)
+    # smart_answer6 = generate_smart_response(test_query6, results6, llm)
 
-    print(f"Query: {test_query6}")
-    print(f"Smart Answer: {smart_answer6}")
-    print("-" * 50)
+    # print(f"Query: {test_query6}")
+    # print(f"Smart Answer: {smart_answer6}")
+    # print("-" * 50)
 
-    # Test clear query
-    test_query7 = "what kind of covers are included under the care insurance policy?"
-    results7 = rag_retriever.retrieve(test_query7)
-    smart_answer7 = generate_smart_response(test_query7, results7, llm)
+    # # Test clear query
+    # test_query7 = "what kind of covers are included under the care insurance policy?"
+    # results7 = rag_retriever.retrieve(test_query7)
+    # smart_answer7 = generate_smart_response(test_query7, results7, llm)
 
-    print(f"Query: {test_query7}")
-    print(f"Smart Answer: {smart_answer7}")
+    # print(f"Query: {test_query7}")
+    # print(f"Smart Answer: {smart_answer7}")
+
+#----------------------------------------Test the smart response system ends----------------------------------------
+#----------------------------------------Test the smart response system ends----------------------------------------
+
