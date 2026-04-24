@@ -102,7 +102,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 import faiss
 import uuid
-from typing import List
+from typing import Any, Dict, List
 import os
 import pickle
 #from sklearn.metrics.pairwise import cosine_similarity
